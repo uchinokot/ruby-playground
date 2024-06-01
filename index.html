@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <title>Ruby Playground</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs/loader.min.js"></script>
+
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'neon-pink': '#ff6ac1',
+              'neon-blue': '#5eead4',
+              'dark-purple': '#22152c',
+            },
+            fontFamily: {
+              'code': ['Fira Code', 'monospace'],
+            },
+          }
+        }
+      }
+    </script>
+
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap');
+
+      body {
+        background-image:
+          radial-gradient(circle at 10% 20%, rgba(91, 37, 178, 0.1) 0%, rgba(9, 1, 24, 0.1) 90%),
+          linear-gradient(to bottom, #07041a 0%, #1e1236 100%);
+        background-attachment: fixed;
+      }
+
+      #ruby-version {
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ff6ac1' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+      }
+    </style>
+
+    <script>
+      const rubyVersions = {
+        '3.2': 'https://cdn.jsdelivr.net/npm/@ruby/3.2-wasm-wasi@2.5.0/dist/browser.script.iife.js',
+        '3.3': 'https://cdn.jsdelivr.net/npm/@ruby/3.3-wasm-wasi@2.5.0/dist/browser.script.iife.js'
+      };
+
+      let currentRubyWasm = null;
+
+      async function loadRubyWasm(version) {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = rubyVersions[version];
+          script.onload = () => {
+            currentRubyWasm = window.Ruby;
+            resolve();
+          };
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      loadRubyWasm('3.3');
+    </script>
+
+    <script type="text/ruby">
+      # frozen_string_literal: true
+
+      require 'js'
+      require 'stringio'
+
+      def document
+        @document ||= JS.global[:document]
+      end
+
+      def execute(code)
+        output = StringIO.new
+        original_stdout = $stdout
+        $stdout = output
+
+        begin
+          result = eval(code)
+          $stdout = original_stdout
+          captured_output = output.string.chomp
+          full_result = captured_output
+          full_result += "\n=> #{result.inspect}" unless result.nil?
+          document.getElementById('result')[:innerText] = full_result
+        rescue Exception => e
+          $stdout = original_stdout
+          document.getElementById('result')[:innerText] = "エラー: #{e.message}"
+        ensure
+          $stdout = original_stdout
+        end
+      end
+
+      button = document.getElementById('executeButton')
+
+      button.addEventListener('click') do |_e|
+        ruby_code = JS.global[:editorContent].to_s
+        execute(ruby_code)
+      end
+    </script>
+  </head>
+  <body class="min-h-screen text-gray-100 font-code">
+    <div class="container mx-auto px-4 py-8">
+      <h1 class="text-4xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-neon-pink to-neon-blue">
+        Ruby Playground
+      </h1>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="space-y-6">
+          <div>
+            <label for="ruby-version" class="block text-sm font-medium mb-2 text-neon-blue">Ruby Version:</label>
+            <select id="ruby-version" class="w-full bg-dark-purple border border-neon-pink text-neon-pink rounded-md py-2 px-3 focus:outline-none focus:ring-2 focus:ring-neon-blue appearance-none">
+              <option value="3.2">Ruby 3.2</option>
+              <option value="3.3" selected>Ruby 3.3</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="ruby_code_editor" class="block text-sm font-medium mb-2 text-neon-blue">EDITOR:</label>
+            <div id="ruby_code_editor" class="w-full h-[calc(100vh-300px)] rounded-md overflow-hidden border border-neon-pink"></div>
+          </div>
+
+          <div class="flex justify-end">
+            <button id="executeButton" class="bg-neon-pink hover:bg-pink-600 text-dark-purple font-bold py-2 px-6 rounded-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-neon-blue">
+              Run
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label for="result" class="block text-sm font-medium mb-2 text-neon-blue">OUTPUT:</label>
+          <div id="result" class="bg-dark-purple border border-neon-blue text-neon-blue font-mono text-sm p-4 rounded-md h-[calc(100vh-200px)] overflow-auto whitespace-pre-wrap"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.36.1/min/vs' }});
+      require(['vs/editor/editor.main'], function() {
+        window.editor = monaco.editor.create(document.getElementById('ruby_code_editor'), {
+          value: `puts "Ruby version: #{RUBY_DESCRIPTION}"
+(0..10).overlap?(5..15)`,
+          language: 'ruby',
+          theme: 'vs-dark',
+          fontSize: 14,
+          minimap: { enabled: false },
+          automaticLayout: true
+        });
+
+        document.getElementById('ruby-version').addEventListener('change', async function(e) {
+          const selectedVersion = e.target.value;
+          const currentCode = editor.getValue();
+
+          try {
+            await loadRubyWasm(selectedVersion);
+            const updatedCode = currentCode.replace(
+              /puts "Ruby version: .*"/,
+              `puts "Ruby version: #{RUBY_DESCRIPTION}"`
+            );
+            editor.setValue(updatedCode);
+            document.getElementById('result').innerText = '';
+          } catch (error) {
+            console.error('Failed to load Ruby WASM:', error);
+            alert('Ruby WASMの読み込みに失敗しました。');
+          }
+        });
+
+        document.getElementById('executeButton').addEventListener('click', function() {
+          window.editorContent = editor.getValue();
+        });
+      });
+    </script>
+  </body>
+</html>
